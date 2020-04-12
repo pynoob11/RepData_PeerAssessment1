@@ -1,0 +1,94 @@
+---
+title: "FitnessData"
+output: html_document
+---
+
+#Introduction
+Analysis of fitness data from fitness trackers like fitbit over 2 months.
+Data is fed for 2 months at a time interval of 5 mins each. There are some empty logs as well.
+
+#Reading the file from the link provided and loading it on to be read.
+
+```{r}
+library(data.table)
+library(ggplot2)
+
+fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(fileUrl, destfile = paste0(getwd(), '/repdata%2Fdata%2Factivity.zip'), method = "curl")
+unzip("repdata%2Fdata%2Factivity.zip",exdir = "data")
+
+dt<- data.table::fread(input= 'data/activity.csv')
+```
+
+#Histogram of total number of steps taken across all the days
+```{r}
+Totalsteps<- dt[, c(lapply(.SD, sum, na.rm= FALSE)), .SDcols= c("steps"), by= .(date)]
+head(Totalsteps, 10)
+
+ggplot(Totalsteps, aes(x=steps)) +
+  geom_histogram(fill= 'blue', binwidth = 750)+
+  labs( title= 'Total Number of Steps', x='Steps', y='Freq')
+```
+
+#Mean and Median of data
+```{r}
+Totalsteps[, .(MeanS= mean(steps, na.rm= TRUE), MedianS= median(steps, na.rm= TRUE))]
+```
+
+#Time Series Plot
+
+```{r}
+interval<- dt[, c(lapply(.SD, mean, na.rm= TRUE)), .SDcols= c('steps'), by= .(interval)]
+ggplot(interval, aes(x=interval, y=steps))+
+  geom_line(color= 'red', size=0.75)+
+  labs(title= 'average steps over the course of the day', x='Time', y='Steps')
+```
+
+#Locating and Replcing missing values
+
+Step1- Finding number of missing values.
+```{r}
+dt[is.na(steps), .N]
+```
+Step2- Replacing them with median of complete dataset
+```{r}
+dt[is.na(steps), 'steps']<- dt[, c(lapply(.SD, median, na.rm= TRUE)), .SDcols= c('steps')]
+data.table::fwrite(x= dt, file= 'data/newactivity.csv', quote = FALSE)
+```
+
+#Calculating new mean and median
+
+```{r}
+TotalStepsNew <- dt[, c(lapply(.SD, sum, na.rm= FALSE)), .SDcols= c('steps'), by= .(date)]
+TotalStepsNew[, .(MeanNew= mean(steps, na.rm= FALSE), MedianNew= median(steps, na.rm= FALSE))]
+```
+
+Hence, mean and median both cahnge after injecting values in place of null characters.
+
+#New Histogram
+
+```{r}
+TotalStepsNew<- dt[, c(lapply(.SD, sum, na.rm= FALSE)), .SDcols= c("steps"), by= .(date)]
+head(Totalsteps, 10)
+
+ggplot(TotalStepsNew, aes(x=steps)) +
+  geom_histogram(fill= 'blue', binwidth = 750)+
+  labs( title= 'Total Number of Steps', x='Steps', y='Freq')
+```
+
+#Seperating on basis of weekend and weekdays
+
+```{r}
+dt[, date := as.POSIXct(date, format = "%Y-%m-%d")]
+dt[, `Day of Week`:= weekdays(x = date)]
+dt[grepl(pattern = "Monday|Tuesday|Wednesday|Thursday|Friday", x = `Day of Week`), "weekday or weekend"] <- "weekday"
+dt[grepl(pattern = "Saturday|Sunday", x = `Day of Week`), "weekday or weekend"] <- "weekend"
+dt[, `weekday or weekend` := as.factor(`weekday or weekend`)]
+head(dt, 10)
+```
+
+```{r}
+dt[is.na(steps), "steps"] <- dt[, c(lapply(.SD, median, na.rm = TRUE)), .SDcols = c("steps")]
+IntervalDT <- dt[, c(lapply(.SD, mean, na.rm = TRUE)), .SDcols = c("steps"), by = .(interval, `weekday or weekend`)] 
+ggplot(IntervalDT , aes(x = interval , y = steps, color=`weekday or weekend`)) + geom_line() + labs(title = "Avg. Daily Steps by Weektype", x = "Interval", y = "No. of Steps") + facet_wrap(~`weekday or weekend` , ncol = 1, nrow=2)
+```
